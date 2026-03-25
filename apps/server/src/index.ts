@@ -1,8 +1,11 @@
 import express from "express";
+import "express-async-errors";
 import cors from "cors";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { connectDB } from "./config/db";
+import { protect } from "./middleware/auth.middleware";
+import { errorHandler } from "./middleware/error.middleware";
 import authRoutes from "./routes/auth.routes";
 import progressRoutes from "./routes/progress.routes";
 import topicsRoutes from "./routes/topics.routes";
@@ -33,11 +36,14 @@ app.use(
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
-app.use("/api/progress", progressRoutes);
-app.use("/api/topics", topicsRoutes);
-app.use("/api/stats", statsRoutes);
+/** All other /api routes require a valid JWT (401 if missing or invalid). */
+app.use("/api/progress", protect, progressRoutes);
+app.use("/api/topics", protect, topicsRoutes);
+app.use("/api/stats", protect, statsRoutes);
 
 app.get("/api/health", (_, res) => res.json({ status: "ok" }));
+
+app.use(errorHandler);
 
 const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

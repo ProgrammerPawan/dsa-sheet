@@ -1,20 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { TopicCard } from "@/components/problems/TopicCard";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { filterTopicsBySearchAndDifficulty, type DifficultyFilter } from "@/lib/sheetStats";
-import { useProgressStore } from "@/store/progressStore";
-import { useStatsStore } from "@/store/statsStore";
-import { useTopicsStore } from "@/store/topicsStore";
+import {useEffect, useRef, useState} from "react";
+import {TopicCard} from "@/components/problems/TopicCard";
+import {Badge} from "@/components/ui/badge";
+import {Button} from "@/components/ui/button";
+import {Card, CardContent} from "@/components/ui/card";
+import {Input} from "@/components/ui/input";
+import {Progress} from "@/components/ui/progress";
+import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
+import type {DifficultyFilter} from "@/lib/sheetStats";
+import {useDebouncedValue} from "@/lib/useDebouncedValue";
+import {useProgressStore} from "@/store/progressStore";
+import {useStatsStore} from "@/store/statsStore";
+import {useTopicsStore} from "@/store/topicsStore";
 
 const DIFFICULTIES: DifficultyFilter[] = ["All", "Easy", "Medium", "Hard"];
 
 export default function SheetPage() {
   const topics = useTopicsStore((s) => s.topics);
+  const nav = useTopicsStore((s) => s.nav);
   const topicsLoading = useTopicsStore((s) => s.loading);
   const topicsError = useTopicsStore((s) => s.error);
   const fetchTopics = useTopicsStore((s) => s.fetchTopics);
@@ -29,16 +31,20 @@ export default function SheetPage() {
   const fetchStats = useStatsStore((s) => s.fetchStats);
 
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [difficulty, setDifficulty] = useState<DifficultyFilter>("All");
   const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
 
   const topicRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
-    void fetchTopics();
     void fetchProgress();
     void fetchStats();
-  }, [fetchTopics, fetchProgress, fetchStats]);
+  }, [fetchProgress, fetchStats]);
+
+  useEffect(() => {
+    void fetchTopics(debouncedSearch, difficulty);
+  }, [debouncedSearch, difficulty, fetchTopics]);
 
   useEffect(() => {
     if (!topics.length) return;
@@ -49,11 +55,6 @@ export default function SheetPage() {
   }, [topics]);
 
   const searchActive = search.trim().length > 0;
-
-  const filteredTopics = useMemo(
-    () => filterTopicsBySearchAndDifficulty(topics, search, difficulty),
-    [topics, search, difficulty]
-  );
 
   const handleToggleTopic = (topicId: string) => {
     if (searchActive) return;
@@ -78,7 +79,8 @@ export default function SheetPage() {
   };
 
   const showSkeleton =
-    (topicsLoading && topics.length === 0) || (statsLoading && !summary && topics.length > 0);
+    (topicsLoading && topics.length === 0) ||
+    (statsLoading && !summary && topics.length > 0);
 
   if (showSkeleton) {
     return (
@@ -124,21 +126,28 @@ export default function SheetPage() {
           <CardContent className="space-y-4 p-6">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Overall progress</p>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Overall progress
+                </p>
                 <p className="text-2xl font-semibold tracking-tight">
                   {overall.solvedCount}/{overall.totalProblems}{" "}
-                  <span className="text-base font-normal text-muted-foreground">solved</span>
+                  <span className="text-base font-normal text-muted-foreground">
+                    solved
+                  </span>
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Badge className="border-transparent bg-emerald-500/15 text-emerald-800">
-                  Easy {overall.byDifficulty.Easy.solved}/{overall.byDifficulty.Easy.total}
+                  Easy {overall.byDifficulty.Easy.solved}/
+                  {overall.byDifficulty.Easy.total}
                 </Badge>
                 <Badge className="border-transparent bg-amber-500/15 text-amber-900">
-                  Medium {overall.byDifficulty.Medium.solved}/{overall.byDifficulty.Medium.total}
+                  Medium {overall.byDifficulty.Medium.solved}/
+                  {overall.byDifficulty.Medium.total}
                 </Badge>
                 <Badge className="border-transparent bg-red-500/15 text-red-800">
-                  Hard {overall.byDifficulty.Hard.solved}/{overall.byDifficulty.Hard.total}
+                  Hard {overall.byDifficulty.Hard.solved}/
+                  {overall.byDifficulty.Hard.total}
                 </Badge>
               </div>
             </div>
@@ -179,28 +188,25 @@ export default function SheetPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {topics.map((topic) => {
-            const st = summary?.topics.find((t) => t.id === topic.id);
-            return (
-              <Button
-                key={topic.id}
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="gap-2 rounded-full"
-                onClick={() => jumpToTopic(topic.id)}
-              >
-                <span className="font-medium">{topic.title}</span>
-                <span className="text-xs text-muted-foreground">
-                  {st ? `${st.solvedCount}/${st.totalProblems}` : "—"}
-                </span>
-              </Button>
-            );
-          })}
+          {nav.map((topic) => (
+            <Button
+              key={topic.id}
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="gap-2 rounded-full"
+              onClick={() => jumpToTopic(topic.id)}
+            >
+              <span className="font-medium">{topic.title}</span>
+              <span className="text-xs text-muted-foreground">
+                {topic.solvedCount}/{topic.totalProblems}
+              </span>
+            </Button>
+          ))}
         </div>
       </div>
 
-      {filteredTopics.length === 0 ? (
+      {topics.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-sm text-muted-foreground">
             No problems match your filters. Try clearing search or difficulty.
@@ -208,7 +214,7 @@ export default function SheetPage() {
         </Card>
       ) : (
         <div className="space-y-6">
-          {filteredTopics.map((topic) => {
+          {topics.map((topic) => {
             const isExpanded = searchActive || expandedTopicId === topic.id;
             return (
               <div
@@ -223,7 +229,6 @@ export default function SheetPage() {
                   onToggle={onToggleProblem}
                   isExpanded={isExpanded}
                   onToggleExpand={() => handleToggleTopic(topic.id)}
-                  searchQuery={search}
                 />
               </div>
             );

@@ -12,27 +12,36 @@ const signToken = (id: string) => {
 };
 
 export const register = async (req: Request, res: Response) => {
-  try {
-    const { name, username, email, password } = req.body;
-    const exists = await User.findOne({ $or: [{ email }, { username }] });
-    if (exists) return res.status(400).json({ message: "User already exists" });
-    const user = await User.create({ name, username, email, password });
-    const token = signToken(user._id.toString());
-    res.status(201).json({ token, user: { _id: user._id, name: user.name, username: user.username, email: user.email } });
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
+  const { name, username, email, password } = req.body;
+  const exists = await User.findOne({ $or: [{ email }, { username }] });
+  if (exists) return res.status(400).json({ message: "User already exists" });
+  const user = await User.create({ name, username, email, password });
+  const token = signToken(user._id.toString());
+  res.status(201).json({
+    token,
+    user: {
+      _id: user._id,
+      name: user.name,
+      username: user.username,
+      email: user.email,
+    },
+  });
 };
 
 export const login = async (req: Request, res: Response) => {
-  try {
-    const { username, password } = req.body;
-    const user = await User.findOne({ username });
-    if (!user || !(await user.comparePassword(password)))
-      return res.status(401).json({ message: "Invalid credentials" });
-    const token = signToken(user._id.toString());
-    res.json({ token, user: { _id: user._id, name: user.name, username: user.username, email: user.email } });
-  } catch {
-    res.status(500).json({ message: "Server error" });
+  const { username, password } = req.body;
+  const user = await User.findOne({ username });
+  if (!user || !(await user.comparePassword(password))) {
+    return res.status(401).json({ message: "Invalid credentials" });
   }
+  const token = signToken(user._id.toString());
+  res.json({
+    token,
+    user: {
+      _id: user._id,
+      name: user.name,
+      username: user.username,
+      email: user.email,
+    },
+  });
 };

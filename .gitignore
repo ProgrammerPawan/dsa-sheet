@@ -3,8 +3,11 @@ node_modules/
 dist/
 build/
 .turbo/
-.env
-.env.local
 *.log
 .vscode/
 .DS_Store
+
+# Environment and secrets — do not commit
+.env
+.env.*
+!.env.example

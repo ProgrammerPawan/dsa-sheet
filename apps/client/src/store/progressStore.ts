@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { ProgressMap } from "@dsa-sheet/shared";
 import api from "../api/axios";
 import { useStatsStore } from "./statsStore";
+import { useTopicsStore } from "./topicsStore";
 
 interface ProgressState {
   progress: ProgressMap;
@@ -26,6 +27,7 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
     try {
       await api.post("/progress", { problemId, completed: !current });
       void useStatsStore.getState().fetchStats();
+      void useTopicsStore.getState().refetchCurrentTopics();
     } catch {
       set({ progress: prev });
     }
