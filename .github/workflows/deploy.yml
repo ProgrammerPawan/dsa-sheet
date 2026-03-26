@@ -1,0 +1,79 @@
+name: Deploy DSA Sheet
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-client:
+    name: Deploy Client → S3 + CloudFront
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @dsa-sheet/shared build
+
+      - name: Build client
+        run: pnpm --filter client build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync apps/client/dist/ s3://${{ secrets.S3_BUCKET }} \
+            --region eu-north-1 \
+            --delete \
+            --cache-control "public, max-age=31536000" \
+            --exclude "index.html"
+          aws s3 cp apps/client/dist/index.html s3://${{ secrets.S3_BUCKET }}/index.html \
+            --region eu-north-1 \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DIST_ID }} \
+            --paths "/*"
+
+  deploy-server:
+    name: Deploy Server → EC2
+    runs-on: ubuntu-latest
+    needs: deploy-client
+    steps:
+      - name: SSH into EC2 and deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/dsa-sheet
+            git pull origin main
+            pnpm install --frozen-lockfile
+            pnpm --filter @dsa-sheet/shared build
+            pnpm --filter server build
+            pm2 restart dsa-sheet-server --update-env
+            pm2 save
