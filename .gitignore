@@ -6,8 +6,12 @@ build/
 *.log
 .vscode/
 .DS_Store
+.pem
 
 # Environment and secrets — do not commit
 .env
 .env.*
 !.env.example
+.env
+.env.production
+.env.local
